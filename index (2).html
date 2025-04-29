@@ -1,0 +1,403 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tribe of the Dawn</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <div id="root" class="min-h-screen flex items-center justify-center"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const App = () => {
+      // Default initial state
+      const defaultState = {
+        character: {
+          name: "Kael",
+          strength: 5,
+          agility: 3,
+          crafting: 2,
+          level: 1,
+          experience: 0,
+        },
+        actionPoints: 10,
+        maxActionPoints: 20,
+        food: 50,
+        tools: 0,
+        stones: 0,
+        sticks: 0,
+        spears: 0,
+      };
+
+      // Load state from localStorage or use default
+      const loadSavedState = () => {
+        try {
+          const saved = localStorage.getItem("tribeOfTheDawn");
+          return saved ? JSON.parse(saved) : defaultState;
+        } catch (e) {
+          console.error("Error loading from localStorage:", e);
+          return defaultState;
+        }
+      };
+
+      // Initialize state
+      const [character, setCharacter] = useState(loadSavedState().character);
+      const [actionPoints, setActionPoints] = useState(loadSavedState().actionPoints);
+      const [maxActionPoints, setMaxActionPoints] = useState(loadSavedState().maxActionPoints);
+      const [food, setFood] = useState(loadSavedState().food);
+      const [tools, setTools] = useState(loadSavedState().tools);
+      const [stones, setStones] = useState(loadSavedState().stones);
+      const [sticks, setSticks] = useState(loadSavedState().sticks);
+      const [spears, setSpears] = useState(loadSavedState().spears);
+      const [message, setMessage] = useState(`Welcome, ${character.name}! Lead your tribe to prosperity.`);
+      const [isTestMode, setIsTestMode] = useState(false); // Track test mode
+
+      // Save state to localStorage
+      const saveState = () => {
+        try {
+          const state = {
+            character,
+            actionPoints,
+            maxActionPoints,
+            food,
+            tools,
+            stones,
+            sticks,
+            spears,
+          };
+          localStorage.setItem("tribeOfTheDawn", JSON.stringify(state));
+        } catch (e) {
+          console.error("Error saving to localStorage:", e);
+        }
+      };
+
+      // Save state whenever it changes
+      useEffect(() => {
+        saveState();
+      }, [character, actionPoints, maxActionPoints, food, tools, stones, sticks, spears]);
+
+      // Normal AP regeneration (1 AP every 30 seconds)
+      useEffect(() => {
+        if (!isTestMode) {
+          const interval = setInterval(() => {
+            setActionPoints(prev => (prev < maxActionPoints ? prev + 1 : prev));
+          }, 30000);
+          return () => clearInterval(interval);
+        }
+      }, [isTestMode, maxActionPoints]);
+
+      // Test mode AP regeneration (5 AP every second)
+      useEffect(() => {
+        if (isTestMode) {
+          const interval = setInterval(() => {
+            setActionPoints(prev => (prev < maxActionPoints ? Math.min(prev + 5, maxActionPoints) : prev));
+          }, 1000);
+          return () => clearInterval(interval);
+        }
+      }, [isTestMode, maxActionPoints]);
+
+      // Test boost: Enable 5 AP per second for 30 seconds
+      const testBoost = () => {
+        if (!isTestMode) {
+          setIsTestMode(true);
+          setMessage("Test Boost: Generating 5 AP per second for 30 seconds!");
+          setTimeout(() => {
+            setIsTestMode(false);
+            setMessage("AP regeneration returned to normal (1 AP every 30 seconds).");
+          }, 30000); // Revert after 30 seconds
+        } else {
+          setMessage("Test Boost already active! Wait for it to end.");
+        }
+      };
+
+      // Reset game to default state
+      const resetGame = () => {
+        try {
+          localStorage.removeItem("tribeOfTheDawn");
+          setCharacter(defaultState.character);
+          setActionPoints(defaultState.actionPoints);
+          setMaxActionPoints(defaultState.maxActionPoints);
+          setFood(defaultState.food);
+          setTools(defaultState.tools);
+          setStones(defaultState.stones);
+          setSticks(defaultState.sticks);
+          setSpears(defaultState.spears);
+          setIsTestMode(false);
+          setMessage("Game reset! Starting fresh.");
+        } catch (e) {
+          console.error("Error resetting game:", e);
+          setMessage("Error resetting game.");
+        }
+      };
+
+      // Random roll function (1-10) for outcome variability
+      const roll = () => Math.floor(Math.random() * 10) + 1;
+
+      // Update character attributes helper
+      const updateCharacterAttribute = (attribute, value) => {
+        setCharacter(prev => ({
+          ...prev,
+          [attribute]: prev[attribute] + value,
+        }));
+      };
+
+      // Action: Hunt (costs 5 AP, depends on strength)
+      const hunt = () => {
+        if (actionPoints >= 5) {
+          setActionPoints(actionPoints - 5);
+          const rollResult = roll();
+          const successChance = character.strength + rollResult;
+          let outcome;
+          if (successChance >= 10) {
+            setFood(food + 20);
+            outcome = "Success! You hunted a large beast (+20 food).";
+          } else if (successChance >= 5) {
+            setFood(food + 10);
+            outcome = "Partial success. You caught some small game (+10 food).";
+          } else {
+            outcome = "Failed. The prey escaped.";
+          }
+          gainExperience(10);
+          setMessage(outcome);
+        } else {
+          setMessage("Not enough action points to hunt.");
+        }
+      };
+
+      // Action: Forage (costs 3 AP, depends on agility)
+      const forage = () => {
+        if (actionPoints >= 3) {
+          setActionPoints(actionPoints - 3);
+          const rollResult = roll();
+          const successChance = character.agility + rollResult;
+          let outcome;
+          if (successChance >= 8) {
+            setFood(food + 10);
+            setStones(stones + 3);
+            setSticks(sticks + 3);
+            outcome = "Success! Found berries, stones, and sticks (+10 food, +3 stones, +3 sticks).";
+          } else if (successChance >= 4) {
+            setFood(food + 5);
+            setStones(stones + 1);
+            setSticks(sticks + 1);
+            outcome = "Partial success. Found some resources (+5 food, +1 stone, +1 stick).";
+          } else {
+            outcome = "Failed. No resources found.";
+          }
+          gainExperience(5);
+          setMessage(outcome);
+        } else {
+          setMessage("Not enough action points to forage.");
+        }
+      };
+
+      // Action: Craft Tool (costs 6 AP, 3 stones, 3 sticks, depends on crafting)
+      const craftTool = () => {
+        if (actionPoints >= 6 && stones >= 3 && sticks >= 3 && stones >= 10 && sticks >= 10) {
+          setActionPoints(actionPoints - 6);
+          setStones(stones - 3);
+          setSticks(sticks - 3);
+          const rollResult = roll();
+          const successChance = character.crafting + rollResult;
+          let outcome;
+          if (successChance >= 9) {
+            setTools(tools + 1);
+            outcome = "Success! Crafted a sturdy tool (+1 tool).";
+          } else if (successChance >= 5) {
+            setSpears(spears + 1);
+            outcome = "Partial success. Crafted a spear (+1 spear).";
+          } else {
+            outcome = "Failed. The materials broke.";
+          }
+          gainExperience(15);
+          setMessage(outcome);
+        } else {
+          setMessage("Not enough action points, stones (need 10, have " + stones + "), or sticks (need 10, have " + sticks + ") to craft.");
+        }
+      };
+
+      // Action: Explore (costs 8 AP, depends on agility, chance for stat boost)
+      const explore = () => {
+        if (actionPoints >= 8) {
+          setActionPoints(actionPoints - 8);
+          const rollResult = roll();
+          const successChance = character.agility + rollResult;
+          let outcome;
+          if (successChance >= 12) {
+            updateCharacterAttribute("strength", 1);
+            outcome = `Discovered a sacred spring! Strength increased to ${character.strength + 1}.`;
+          } else if (successChance >= 8) {
+            updateCharacterAttribute("agility", 1);
+            outcome = `Navigated a treacherous path! Agility increased to ${character.agility + 1}.`;
+          } else if (successChance >= 4) {
+            setFood(food + 10);
+            outcome = "Found a hidden grove with food (+10 food).";
+          } else {
+            outcome = "Got lost. No gains.";
+          }
+          gainExperience(20);
+          setMessage(outcome);
+        } else {
+          setMessage("Not enough action points to explore.");
+        }
+      };
+
+      // Action: Train Skill (costs 10 food, 5 AP, improve a skill)
+      const trainSkill = (skill) => {
+        if (actionPoints >= 5 && food >= 10) {
+          setActionPoints(actionPoints - 5);
+          setFood(food - 10);
+          updateCharacterAttribute(skill, 1);
+          gainExperience(10);
+          setMessage(`Trained ${skill}! ${skill.charAt(0).toUpperCase() + skill.slice(1)} increased to ${character[skill] + 1}.`);
+        } else {
+          setMessage("Not enough action points or food to train.");
+        }
+      };
+
+      // Experience and leveling up
+      const gainExperience = (exp) => {
+        const newExp = character.experience + exp;
+        if (newExp >= character.level * 100) {
+          setCharacter(prev => ({
+            ...prev,
+            level: prev.level + 1,
+            experience: newExp - prev.level * 100,
+          }));
+          setMaxActionPoints(maxActionPoints + 5);
+          setMessage(`Level up! ${character.name} is now level ${character.level + 1}. Max AP increased to ${maxActionPoints + 5}.`);
+        } else {
+          setCharacter(prev => ({ ...prev, experience: newExp }));
+        }
+      };
+
+      return (
+        <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+          <h1 class="text-2xl font-bold text-center mb-4">Tribe of the Dawn</h1>
+          <div class="mb-4">
+            <p class="text-lg">Character: <span class="font-semibold">{character.name} (Level {character.level})</span></p>
+            <p class="text-sm">Experience: {character.experience}/{character.level * 100}</p>
+            <p class="text-sm">Strength: {character.strength}</p>
+            <p class="text-sm">Agility: {character.agility}</p>
+            <p class="text-sm">Crafting: {character.crafting}</p>
+            <p class="text-lg mt-2">Action Points: <span class="font-semibold">{actionPoints}/{maxActionPoints}</span></p>
+            <p class="text-lg">Food: <span class="font-semibold">{food}</span></p>
+            <p class="text-lg">Tools: <span class="font-semibold">{tools}</span></p>
+            <p class="text-lg">Stones: <span class="font-semibold">{stones}</span></p>
+            <p class="text-lg">Sticks: <span class="font-semibold">{sticks}</span></p>
+            <p class="text-lg">Spears: <span class="font-semibold">{spears}</span></p>
+          </div>
+          <div class="space-y-2">
+            <button
+              onClick={hunt}
+              class="w-full bg-red-500 text-white py-2 rounded hover:bg-red-600"
+            >
+              Hunt (5 AP)
+            </button>
+            <button
+              onClick={forage}
+              class="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600"
+            >
+              Forage (3 AP)
+            </button>
+            <button
+              onClick={craftTool}
+              class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              disabled={stones < 10 || sticks < 10}
+            >
+              Craft Tool (6 AP, 3 Stones, 3 Sticks)
+            </button>
+            <button
+              onClick={explore}
+              class="w-full bg-purple-500 text-white py-2 rounded hover:bg-purple-600"
+            >
+              Explore (8 AP)
+            </button>
+            <div class="flex space-x-2">
+              <button
+                onClick={() => trainSkill("strength")}
+                class="flex-1 bg-orange-500 text-white py-2 rounded hover:bg-orange-600"
+              >
+                Train Strength (5 AP, 10 Food)
+              </button>
+              <button
+                onClick={() => trainSkill("agility")}
+                class="flex-1 bg-orange-500 text-white py-2 rounded hover:bg-orange-600"
+              >
+                Train Agility (5 AP, 10 Food)
+              </button>
+              <button
+                onClick={() => trainSkill("crafting")}
+                class="flex-1 bg-orange-500 text-white py-2 rounded hover:bg-orange-600"
+              >
+                Train Crafting (5 AP, 10 Food)
+              </button>
+            </div>
+            <button
+              onClick={testBoost}
+              class="w-full bg-yellow-500 text-white py-2 rounded hover:bg-yellow-600"
+            >
+              Test Boost (5 AP/sec for 30s)
+            </button>
+            <button
+              onClick={resetGame}
+              class="w-full bg-gray-500 text-white py-2 rounded hover:bg-gray-600"
+            >
+              Reset Game
+            </button>
+          </div>
+          <p class="mt-4 text-sm text-gray-600">{message}</p>
+          <p class="mt-2 text-xs text-gray-500">Action points regenerate {isTestMode ? "5 AP every second" : "1 AP every 30 seconds"}. Progress is saved automatically.</p>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
